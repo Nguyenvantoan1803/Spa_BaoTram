@@ -1,0 +1,8 @@
+>>> Lưu file logo vào ĐÚNG thư mục này với tên: logo.png <<<
+
+Đường dẫn đầy đủ phải là:
+    d:\spa-baotram\frontend\public\images\logo.png
+
+Sau khi lưu xong, vào trình duyệt nhấn Ctrl + F5 để thấy logo.
+
+(Code đã trỏ sẵn tới "/images/logo.png" trong Navbar.jsx)
