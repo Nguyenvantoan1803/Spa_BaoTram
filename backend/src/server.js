@@ -2,9 +2,14 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const helmet = require("helmet");
+const compression = require("compression");
+const sanitizeHtml = require("sanitize-html");
+const rateLimit = require("express-rate-limit");
 
 const connectDB = require("./db");
 const { login, requireAuth } = require("./auth");
+const { validate, rules } = require("./validators");
 const { sendBookingMail, sendContactMail } = require("./mailer");
 const {
   Service,
@@ -21,14 +26,112 @@ const {
   Customer
 } = require("./models");
 
+// ====== Kiem tra env BAT BUOC khi start ======
+const REQUIRED_ENVS = ["MONGODB_URI", "ADMIN_USERNAME", "ADMIN_PASSWORD_HASH", "JWT_SECRET"];
+const missingEnvs = REQUIRED_ENVS.filter((k) => !process.env[k]);
+if (missingEnvs.length) {
+  console.error("❌ Thieu env bat buoc:", missingEnvs.join(", "));
+  console.error("   Vui long copy backend/.env.example thanh backend/.env va dien day du.");
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const IS_PROD = NODE_ENV === "production";
 
-// Middleware
-app.use(cors());
-// Giới hạn lớn hơn mặc định (100kb) để nhận được ảnh gửi qua chat
-app.use(express.json({ limit: "8mb" }));
-app.use(morgan("dev"));
+// HTTPS enforcement (chi bat khi deploy production sau proxy)
+if (IS_PROD && process.env.FORCE_HTTPS === "true") {
+  app.use((req, res, next) => {
+    if (req.headers["x-forwarded-proto"] !== "https") {
+      return res.redirect(301, "https://" + req.headers.host + req.url);
+    }
+    next();
+  });
+}
+
+// Middleware bao mat: them cac HTTP header an toan
+app.use(helmet({
+  contentSecurityPolicy: false,                // API JSON - frontend chay rieng
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
+
+// Compression (gzip) - giam ~70% kich thuoc response
+app.use(compression());
+
+// CORS - BAT BUOC khai bao CLIENT_ORIGIN trong production
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN;
+if (IS_PROD && !CLIENT_ORIGIN) {
+  console.error("❌ Production BAT BUOC khai bao CLIENT_ORIGIN trong .env");
+  process.exit(1);
+}
+const allowedOrigins = CLIENT_ORIGIN ? CLIENT_ORIGIN.split(",").map((s) => s.trim()) : [];
+app.use(cors({
+  origin: (origin, cb) => {
+    // Khong co origin = same-origin / curl / mobile app -> cho phep
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.length === 0) return cb(null, true);    // dev
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error("CORS blocked: " + origin));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}));
+
+// Body parser - chia 2 muc:
+// + 200kb cho hau het route (chong DoS)
+// + 6mb cho route chat upload anh
+app.use(express.json({ limit: "200kb" }));
+const chatBodyParser = express.json({ limit: "6mb" });
+
+app.use(morgan(IS_PROD ? "combined" : "dev"));
+
+// Trust proxy - dung cho proxy (Cloudflare, Nginx, ngrok)
+// Lay tu env de an toan, mac dinh 0 (khong tin)
+const trustProxy = parseInt(process.env.TRUST_PROXY || "0", 10);
+if (trustProxy > 0) app.set("trust proxy", trustProxy);
+
+/* ---------- Chống lạm dụng (rate limit) ---------- */
+// Đăng nhập admin: chặn dò mật khẩu (brute force)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Bạn thử đăng nhập quá nhiều lần. Vui lòng đợi 15 phút rồi thử lại." }
+});
+// Các form công khai (đặt lịch, liên hệ): chặn spam
+const publicWriteLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau ít phút." }
+});
+// Chat: nới rộng hơn vì một cuộc trò chuyện có thể gửi nhiều tin
+const chatLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Bạn gửi tin quá nhanh. Vui lòng thử lại sau ít phút." }
+});
+// Track event (visit/click) - tranh spam fake stats
+const trackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Helper: lam sach HTML/script trong text khach gui (chong XSS)
+const cleanText = (text) =>
+  sanitizeHtml(String(text || ""), {
+    allowedTags: [],
+    allowedAttributes: {},
+    disallowedTagsMode: "discard"
+  });
 
 // Helper bắt lỗi async
 const wrap = (fn) => (req, res) =>
@@ -123,13 +226,11 @@ app.get(
 // --- Đặt lịch ---
 app.post(
   "/api/booking",
+  publicWriteLimiter,
+  rules.booking,
+  validate,
   wrap(async (req, res) => {
     const { name, phone, service, branch, date, note } = req.body;
-    if (!name || !phone || !service) {
-      return res
-        .status(400)
-        .json({ error: "Vui lòng nhập đầy đủ họ tên, số điện thoại và dịch vụ" });
-    }
     const booking = await Booking.create({ name, phone, service, branch, date, note });
     // Tự tạo hồ sơ khách hàng theo SĐT (nếu chưa có) để nhân viên bổ sung sau
     if (phone) {
@@ -157,13 +258,11 @@ app.get(
 // --- Liên hệ ---
 app.post(
   "/api/contact",
+  publicWriteLimiter,
+  rules.contact,
+  validate,
   wrap(async (req, res) => {
     const { name, email, phone, message } = req.body;
-    if (!name || !message) {
-      return res
-        .status(400)
-        .json({ error: "Vui lòng nhập họ tên và nội dung tin nhắn" });
-    }
     const entry = await Contact.create({ name, email, phone, message });
     sendContactMail(entry).catch(() => {});
     res.status(201).json({
@@ -186,6 +285,7 @@ const vnDay = (d = new Date()) =>
 // Ghi nhận 1 sự kiện (công khai, gọi từ website)
 app.post(
   "/api/track",
+  trackLimiter,
   wrap(async (req, res) => {
     const type = String(req.body.type || "");
     if (!EVENT_TYPES.includes(type)) {
@@ -235,20 +335,23 @@ app.post(
 );
 
 // Khách gửi tin nhắn (tạo hội thoại nếu chưa có)
+// chatBodyParser dung de cho phep upload anh 6MB (cao hon default 200KB)
 app.post(
   "/api/chat/session/:visitorId",
+  chatBodyParser,
+  chatLimiter,
   wrap(async (req, res) => {
     const { visitorId } = req.params;
-    const text = (req.body.text || "").trim();
+    const text = cleanText(req.body.text).trim().slice(0, 2000);
     const image = cleanImage(req.body.image);
     if (!text && !image) return res.status(400).json({ error: "Tin nhắn trống" });
 
     let conv = await Conversation.findOne({ visitorId });
     if (!conv) conv = new Conversation({ visitorId, messages: [] });
 
-    // Cập nhật tên/sđt nếu khách cung cấp
-    if (req.body.name) conv.name = String(req.body.name).slice(0, 80);
-    if (req.body.phone) conv.phone = String(req.body.phone).slice(0, 30);
+    // Cập nhật tên/sđt nếu khách cung cấp (sanitize chong XSS)
+    if (req.body.name) conv.name = cleanText(req.body.name).slice(0, 80);
+    if (req.body.phone) conv.phone = cleanText(req.body.phone).slice(0, 30);
 
     conv.messages.push({ from: "user", text, image });
     conv.lastMessageAt = new Date();
@@ -265,7 +368,7 @@ app.post(
    ========================================================= */
 
 // --- Đăng nhập admin -> trả token ---
-app.post("/api/admin/login", login);
+app.post("/api/admin/login", loginLimiter, rules.login, validate, login);
 
 // Sinh id ngẫu nhiên nếu client không gửi
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -451,9 +554,10 @@ app.put(
 // Nhân viên trả lời khách
 app.post(
   "/api/chat/:id/reply",
+  chatBodyParser,
   requireAuth,
   wrap(async (req, res) => {
-    const text = (req.body.text || "").trim();
+    const text = cleanText(req.body.text).trim().slice(0, 2000);
     const image = cleanImage(req.body.image);
     if (!text && !image) return res.status(400).json({ error: "Tin nhắn trống" });
     const conv = await Conversation.findById(req.params.id);
@@ -558,9 +662,55 @@ app.use((req, res) => {
   res.status(404).json({ error: "Endpoint không tồn tại" });
 });
 
+// Error handler chung (cuoi cung)
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error("[ERROR]", err.message);
+  // CORS error
+  if (err.message?.startsWith("CORS blocked")) {
+    return res.status(403).json({ error: "Domain khong duoc phep" });
+  }
+  res.status(500).json({ error: "Loi may chu" });
+});
+
 // Kết nối DB rồi mới khởi động server
+let server;
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`✅ Bao Tram Spa API đang chạy tại http://localhost:${PORT}`);
+    console.log(`   Environment: ${NODE_ENV}`);
+    console.log(`   CORS allowed: ${allowedOrigins.length ? allowedOrigins.join(", ") : "(all - dev mode)"}`);
   });
+});
+
+// Graceful shutdown - xu ly SIGTERM/SIGINT de tat server an toan
+const mongoose = require("mongoose");
+const shutdown = async (signal) => {
+  console.log(`\n[${signal}] Dang tat server...`);
+  if (server) {
+    server.close(async () => {
+      try {
+        await mongoose.connection.close();
+        console.log("✅ Da dong tat ca connection. Bye!");
+        process.exit(0);
+      } catch (err) {
+        console.error("Loi khi shutdown:", err.message);
+        process.exit(1);
+      }
+    });
+    // Force shutdown sau 10s neu khong dong duoc
+    setTimeout(() => {
+      console.error("⚠️ Force shutdown sau 10s");
+      process.exit(1);
+    }, 10000);
+  }
+};
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("unhandledRejection", (err) => {
+  console.error("[UnhandledRejection]", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[UncaughtException]", err);
+  shutdown("uncaughtException");
 });

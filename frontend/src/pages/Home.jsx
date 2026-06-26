@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { getCombos, getTestimonials, getServices, postBooking, getInfo } from "../api";
 import { buildServiceOptions } from "../servicesData";
 import {
@@ -158,9 +159,16 @@ export default function Home() {
 
   return (
     <div>
+      <Helmet>
+        <title>Bảo Trâm Beauty Spa & Salon - Gội đầu dưỡng sinh tại Bến Tre</title>
+        <meta name="description" content="Bảo Trâm Beauty Spa & Salon - Gội đầu dưỡng sinh thảo dược, massage, chăm sóc da, nail tại Châu Thành, Bến Tre. 3 chi nhánh - Đặt lịch online nhận voucher ưu đãi!" />
+        <link rel="canonical" href="https://spabaotram.com/" />
+        <meta property="og:url" content="https://spabaotram.com/" />
+        <meta property="og:title" content="Bảo Trâm Beauty Spa & Salon - Tôn vinh vẻ đẹp tự nhiên" />
+      </Helmet>
       {/* Floating contact */}
       <div className="floating">
-        <a className="call" href={`tel:${PHONE.replace(/\s/g, "")}`}><IcPhone /></a>
+        <a className="call" href={`tel:${PHONE.replace(/\s/g, "")}`} aria-label="Gọi điện đặt lịch"><IcPhone /></a>
         <a className="zalo" href="https://zalo.me/0327322722" target="_blank" rel="noreferrer"><IcZalo /></a>
         <a className="mess" href="https://m.me/spabaotram" target="_blank" rel="noreferrer"><IcMessenger /></a>
         <a className="map" href="#he-thong"><IcMap /></a>
@@ -213,6 +221,10 @@ export default function Home() {
             <img
               src="https://images.unsplash.com/photo-1519823551278-64ac92734fb1?w=900&q=80"
               alt="Gội đầu dưỡng sinh"
+              fetchpriority="high"
+              decoding="async"
+              width="900"
+              height="600"
             />
           </div>
         </div>
@@ -248,7 +260,7 @@ export default function Home() {
             {combos.map((c) => (
               <div className="combo-card" key={c.id}>
                 <div className="combo-media">
-                  <img src={c.image} alt={c.name} />
+                  <img src={c.image} alt={c.name} loading="lazy" decoding="async" />
                   {c.badge && (
                     <span className={"combo-badge" + (c.best ? " best" : "")}>{c.badge}</span>
                   )}
@@ -313,7 +325,7 @@ export default function Home() {
               onMouseLeave={() => { fbPausedRef.current = false; }}
             >
               <div className="fb-stage">
-                <img className="fb-main" src={fb.img || `https://i.pravatar.cc/240?u=${fb.id}`} alt={fb.name} />
+                <img className="fb-main" src={fb.img || `https://i.pravatar.cc/240?u=${fb.id}`} alt={fb.name} loading="lazy" decoding="async" />
                 <div className="fb-info" key={fbActive}>
                   <div className="fb-stars">
                     {"★".repeat(Math.max(1, Math.min(5, fb.rating || 5)))}
@@ -333,7 +345,7 @@ export default function Home() {
                     onClick={() => setFbActive(i)}
                     aria-label={t.name}
                   >
-                    <img src={t.img || `https://i.pravatar.cc/120?u=${t.id}`} alt={t.name} />
+                    <img src={t.img || `https://i.pravatar.cc/120?u=${t.id}`} alt={t.name} loading="lazy" decoding="async" />
                   </button>
                 ))}
               </div>

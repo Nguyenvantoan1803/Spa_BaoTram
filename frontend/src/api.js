@@ -1,8 +1,9 @@
 import axios from "axios";
 
-// Dùng proxy "/api" (cấu hình trong vite.config.js) trỏ về backend Express
+// Dev: dùng proxy "/api" (vite.config.js) trỏ về backend Express.
+// Production: đặt VITE_API_URL (vd https://api.tenmien.com) lúc build để trỏ backend thật.
 const api = axios.create({
-  baseURL: "/api"
+  baseURL: import.meta.env.VITE_API_URL || "/api"
 });
 
 export const getInfo = () => api.get("/info").then((r) => r.data);

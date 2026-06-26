@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { getServices } from "../api";
 import { formatVND } from "../utils";
 import { SERVICES_DATA as FALLBACK_SERVICES } from "../servicesData";
@@ -18,6 +19,11 @@ export default function Services() {
 
   return (
     <div>
+      <Helmet>
+        <title>Bảng giá Dịch vụ Spa - Bảo Trâm Beauty Châu Thành, Bến Tre</title>
+        <meta name="description" content="Bảng giá đầy đủ dịch vụ tại Bảo Trâm Beauty Spa: gội đầu dưỡng sinh, massage, chăm sóc da, nail, làm tóc. Giá tốt - Chuyên nghiệp." />
+        <link rel="canonical" href="https://spabaotram.com/dich-vu" />
+      </Helmet>
       <section className="page-header">
         <div className="container">
           <h1>Dịch vụ</h1>

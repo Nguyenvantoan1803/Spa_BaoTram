@@ -1,0 +1,41 @@
+# ============================================================
+# Cau hinh cho hosting Apache/cPanel (file nay duoc copy vao dist khi build)
+# Host dung Nginx se bo qua file nay (vo hai) - khi do cau hinh tuong tu trong server block.
+# ============================================================
+
+# ----- SPA fallback: moi route deu tra ve index.html (tranh 404 khi refresh /dich-vu...) -----
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  # Khong rewrite file/thu muc co that
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  # Con lai -> index.html
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# ----- Nen (gzip) giam dung luong truyen -----
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json image/svg+xml
+</IfModule>
+
+# ----- Cache tai nguyen tinh (JS/CSS/anh co hash -> cache lau) -----
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 6 months"
+  ExpiresByType image/png "access plus 6 months"
+  ExpiresByType image/webp "access plus 6 months"
+  ExpiresByType image/svg+xml "access plus 6 months"
+  # index.html khong cache lau de cap nhat ngay khi deploy moi
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ----- Vai header bao mat co ban -----
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

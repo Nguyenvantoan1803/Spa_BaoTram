@@ -7,7 +7,8 @@ export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 export const isLoggedIn = () => !!getToken();
 
-const adminApi = axios.create({ baseURL: "/api" });
+// Dev: proxy "/api". Production: đặt VITE_API_URL trỏ tới backend thật.
+const adminApi = axios.create({ baseURL: import.meta.env.VITE_API_URL || "/api" });
 
 // Tự gắn token vào mọi request
 adminApi.interceptors.request.use((config) => {

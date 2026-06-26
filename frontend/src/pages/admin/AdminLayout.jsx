@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Routes, Route, NavLink, Link, useNavigate } from "react-router-dom";
-import { clearToken, getContacts, getChatUnread } from "../../adminApi";
-import { playDing } from "../../notifySound";
+import { clearToken, getContacts, getChatUnread, getConversations } from "../../adminApi";
+import { playDing, unlockAudio, requestNotifyPermission, showNotify } from "../../notifySound";
 import CrudManager from "./CrudManager.jsx";
 import Submissions from "./Submissions.jsx";
 import Dashboard from "./Dashboard.jsx";
@@ -131,15 +131,46 @@ export default function AdminLayout() {
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
 
-  // Đếm tin nhắn chưa đọc -> hiện badge + kêu khi có tin mới
+  // Mở khoá âm thanh + xin quyền thông báo ngay khi admin tương tác lần đầu
+  // (trình duyệt chặn âm thanh & thông báo cho tới khi có click/gõ phím).
+  useEffect(() => {
+    const onGesture = () => {
+      unlockAudio();
+      requestNotifyPermission();
+    };
+    window.addEventListener("pointerdown", onGesture, { once: true });
+    window.addEventListener("keydown", onGesture, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+    };
+  }, []);
+
+  // Đếm tin nhắn chưa đọc -> hiện badge + kêu chuông + thông báo khi có tin mới
   useEffect(() => {
     const load = async () => {
       try {
         const n = await getChatUnread();
         setChatUnread(n);
-        // Lần đầu chỉ ghi nhận, không kêu; sau đó kêu khi số tăng
-        if (prevUnreadRef.current !== null && n > prevUnreadRef.current && !mutedRef.current) {
-          playDing();
+        // Lần đầu chỉ ghi nhận, không báo; sau đó báo khi số tăng (có tin mới)
+        if (prevUnreadRef.current !== null && n > prevUnreadRef.current) {
+          if (!mutedRef.current) playDing();
+          // Lấy tên khách mới nhất để hiện trong thông báo
+          let who = "Khách";
+          try {
+            const list = await getConversations();
+            if (Array.isArray(list) && list[0]) {
+              who = list[0].name || (list[0].phone ? "SĐT " + list[0].phone : "Khách");
+            }
+          } catch { /* bỏ qua */ }
+          // Hiện thông báo trình duyệt khi admin đang ở tab/ứng dụng khác
+          if (document.hidden) {
+            showNotify(
+              "💬 Tin nhắn mới — Bảo Trâm Spa",
+              `${who} vừa nhắn tin (${n} tin chưa đọc). Bấm để trả lời.`,
+              () => nav("/admin/tin-nhan")
+            );
+          }
         }
         prevUnreadRef.current = n;
       } catch { /* bỏ qua */ }
@@ -147,7 +178,7 @@ export default function AdminLayout() {
     load();
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [nav]);
 
   // Nhấp nháy tiêu đề tab khi có tin chưa đọc & admin đang ở tab khác
   useEffect(() => {
@@ -177,7 +208,9 @@ export default function AdminLayout() {
     const v = !muted;
     setMuted(v);
     localStorage.setItem("baotram_chat_muted", v ? "1" : "0");
-    if (!v) playDing(); // bật tiếng thì kêu thử 1 cái
+    unlockAudio();             // bấm nút là cú tương tác -> mở khoá âm thanh
+    requestNotifyPermission(); // và xin quyền hiện thông báo trình duyệt
+    if (!v) playDing();        // bật tiếng thì kêu thử 1 cái
   };
 
   const logout = () => { clearToken(); nav("/admin/login", { replace: true }); };

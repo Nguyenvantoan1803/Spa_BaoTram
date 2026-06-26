@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/
+
+# Crawl delay tranh nang server
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: https://spabaotram.com/sitemap.xml

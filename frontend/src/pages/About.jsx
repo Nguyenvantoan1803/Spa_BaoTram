@@ -1,6 +1,13 @@
+import { Helmet } from "react-helmet-async";
+
 export default function About() {
   return (
     <div>
+      <Helmet>
+        <title>Giới thiệu - Bảo Trâm Beauty Spa & Salon Châu Thành, Bến Tre</title>
+        <meta name="description" content="Câu chuyện về Bảo Trâm Beauty Spa & Salon - Tận tâm với từng khách hàng, sử dụng 100% thảo dược tự nhiên. 3 chi nhánh tại Châu Thành, Bến Tre." />
+        <link rel="canonical" href="https://spabaotram.com/gioi-thieu" />
+      </Helmet>
       <section className="page-header">
         <div className="container">
           <h1>Giới thiệu</h1>

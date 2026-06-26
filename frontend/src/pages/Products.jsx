@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { getProducts } from "../api";
 import { formatVND } from "../utils";
 
@@ -15,6 +16,11 @@ export default function Products() {
 
   return (
     <div>
+      <Helmet>
+        <title>Sản phẩm Mỹ phẩm chính hãng - Bảo Trâm Beauty Spa</title>
+        <meta name="description" content="Mỹ phẩm & sản phẩm chăm sóc da, tóc chính hãng tại Bảo Trâm Beauty Spa & Salon Bến Tre. Giá tốt - Cam kết chất lượng." />
+        <link rel="canonical" href="https://spabaotram.com/san-pham" />
+      </Helmet>
       <section className="page-header">
         <div className="container">
           <h1>Sản phẩm</h1>
@@ -30,7 +36,7 @@ export default function Products() {
             <div className="grid grid-4">
               {products.map((p) => (
                 <div key={p.id} className="card product-card">
-                  <img src={p.image} alt={p.name} />
+                  <img src={p.image} alt={p.name} loading="lazy" decoding="async" />
                   <div className="body">
                     <div className="cat">{p.category}</div>
                     <h3>{p.name}</h3>

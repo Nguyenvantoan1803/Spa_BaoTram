@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { getNews } from "../api";
 import { formatDate } from "../utils";
 
@@ -16,6 +17,11 @@ export default function News() {
 
   return (
     <div>
+      <Helmet>
+        <title>Tin tức & Khuyến mãi - Bảo Trâm Beauty Spa Bến Tre</title>
+        <meta name="description" content="Tin tức làm đẹp, mẹo chăm sóc da & tóc, khuyến mãi mới nhất tại Bảo Trâm Beauty Spa & Salon Bến Tre." />
+        <link rel="canonical" href="https://spabaotram.com/tin-tuc" />
+      </Helmet>
       <section className="page-header">
         <div className="container">
           <h1>Tin tức</h1>
@@ -36,7 +42,7 @@ export default function News() {
                   style={{ cursor: "pointer" }}
                   onClick={() => setActive(active === n.id ? null : n.id)}
                 >
-                  <img src={n.image} alt={n.title} />
+                  <img src={n.image} alt={n.title} loading="lazy" decoding="async" />
                   <div className="body">
                     <div className="date">{formatDate(n.date)}</div>
                     <h3>{n.title}</h3>

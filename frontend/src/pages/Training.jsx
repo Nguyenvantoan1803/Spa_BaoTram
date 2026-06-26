@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { getTrainings } from "../api";
 import { formatVND } from "../utils";
 
@@ -16,6 +17,11 @@ export default function Training() {
 
   return (
     <div>
+      <Helmet>
+        <title>Khóa học Đào tạo nghề Spa & Làm đẹp - Bảo Trâm Beauty</title>
+        <meta name="description" content="Các khóa đào tạo nghề spa, gội đầu dưỡng sinh, massage, nail, làm tóc chuyên nghiệp tại Bảo Trâm Beauty Spa & Salon Bến Tre." />
+        <link rel="canonical" href="https://spabaotram.com/dao-tao" />
+      </Helmet>
       <section className="page-header">
         <div className="container">
           <h1>Đào tạo</h1>

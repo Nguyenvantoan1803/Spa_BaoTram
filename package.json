@@ -1,0 +1,18 @@
+{
+  "name": "spa-baotram",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bao Tram Beauty Spa & Salon - monorepo (backend + frontend)",
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,magenta \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start": "cd backend && npm run start",
+    "build": "cd frontend && npm run build",
+    "seed": "cd backend && npm run seed",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

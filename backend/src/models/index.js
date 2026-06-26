@@ -205,6 +205,34 @@ const eventSchema = new Schema(
   { versionKey: false }
 );
 
+// ====== INDEXES de toi uu query (chay khi seed/start) ======
+// Booking: tim theo SDT, sort theo createdAt, loc theo status
+bookingSchema.index({ phone: 1 });
+bookingSchema.index({ status: 1, createdAt: -1 });
+bookingSchema.index({ createdAt: -1 });
+
+// Contact: sort theo createdAt
+contactSchema.index({ createdAt: -1 });
+
+// Conversation: sort theo lastMessageAt (visitorId da co unique)
+conversationSchema.index({ lastMessageAt: -1 });
+
+// Customer: tim nhanh theo phone
+customerSchema.index({ phone: 1 }, { unique: true, sparse: true });
+
+// Event: compound index cho stats query
+eventSchema.index({ day: 1, type: 1 });
+
+// News: sort theo date
+newsSchema.index({ date: -1 });
+
+// Tat ca model co "active" -> them index
+serviceSchema.index({ active: 1 });
+comboSchema.index({ active: 1 });
+productSchema.index({ active: 1, category: 1 });
+trainingSchema.index({ active: 1 });
+testimonialSchema.index({ active: 1 });
+
 module.exports = {
   Service: mongoose.model("Service", serviceSchema),
   Combo: mongoose.model("Combo", comboSchema),

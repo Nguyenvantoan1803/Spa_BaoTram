@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { getInfo, getServices, postBooking, postContact } from "../api";
 import { buildServiceOptions } from "../servicesData";
 
@@ -70,6 +71,11 @@ export default function Contact() {
 
   return (
     <div>
+      <Helmet>
+        <title>Liên hệ & Đặt lịch - Bảo Trâm Beauty Spa Bến Tre</title>
+        <meta name="description" content="Liên hệ Bảo Trâm Beauty Spa & Salon: Hotline 032 732 2722, Zalo, Messenger. 3 chi nhánh tại Châu Thành, Bến Tre. Đặt lịch online nhận ưu đãi!" />
+        <link rel="canonical" href="https://spabaotram.com/lien-he" />
+      </Helmet>
       <section className="page-header">
         <div className="container">
           <h1>Liên hệ & Đặt lịch</h1>
