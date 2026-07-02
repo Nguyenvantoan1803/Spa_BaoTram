@@ -28,4 +28,10 @@ export const sendChatMessage = (visitorId, data) =>
 export const pingChatTyping = (visitorId) =>
   api.post(`/chat/session/${visitorId}/typing`).then((r) => r.data);
 
+// --- Đánh giá sau dịch vụ (qua link gửi cho khách) ---
+export const getReviewInfo = (bookingId) =>
+  api.get(`/review/${bookingId}`).then((r) => r.data);
+export const postReview = (bookingId, data) =>
+  api.post(`/review/${bookingId}`, data).then((r) => r.data);
+
 export default api;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Routes, Route, NavLink, Link, useNavigate } from "react-router-dom";
+import { Routes, Route, NavLink, Link, useNavigate, useLocation } from "react-router-dom";
 import { clearToken, getContacts, getChatUnread, getConversations } from "../../adminApi";
 import { playDing, unlockAudio, requestNotifyPermission, showNotify } from "../../notifySound";
 import CrudManager from "./CrudManager.jsx";
@@ -9,6 +9,10 @@ import Stats from "./Stats.jsx";
 import BookingManager from "./BookingManager.jsx";
 import ChatManager from "./ChatManager.jsx";
 import CustomerManager from "./CustomerManager.jsx";
+import CareManager from "./CareManager.jsx";
+import VoucherManager from "./VoucherManager.jsx";
+import StaffManager from "./StaffManager.jsx";
+import ReviewManager from "./ReviewManager.jsx";
 
 /* ----- Cấu hình form & cột cho từng loại nội dung ----- */
 const NEWS = {
@@ -106,23 +110,73 @@ const TESTIMONIALS = {
   ]
 };
 
-const MENU = [
-  { to: "/admin", end: true, ico: "📊", label: "Tổng quan" },
-  { to: "/admin/tin-tuc", ico: "📝", label: "Tin tức" },
-  { to: "/admin/combo", ico: "🎁", label: "Combo" },
-  { to: "/admin/dich-vu", ico: "💆", label: "Dịch vụ" },
-  { to: "/admin/san-pham", ico: "🛍️", label: "Sản phẩm" },
-  { to: "/admin/danh-gia", ico: "⭐", label: "Đánh giá" },
-  { to: "/admin/dat-lich", ico: "📅", label: "Đặt lịch" },
-  { to: "/admin/khach-hang", ico: "🧑", label: "Khách hàng" },
-  { to: "/admin/tin-nhan", ico: "💬", label: "Tin nhắn", badgeKey: "chat" },
-  { to: "/admin/thong-ke", ico: "📈", label: "Thống kê" },
-  { to: "/admin/lien-he", ico: "✉️", label: "Liên hệ" }
+// Menu gom theo nhóm cho gọn, dễ tìm
+const MENU_SECTIONS = [
+  {
+    title: null, // nhóm đầu không cần tiêu đề
+    items: [{ to: "/admin", end: true, ico: "📊", label: "Tổng quan" }]
+  },
+  {
+    title: "Khách hàng & Lịch hẹn",
+    items: [
+      { to: "/admin/dat-lich", ico: "📅", label: "Đặt lịch" },
+      { to: "/admin/khach-hang", ico: "🧑", label: "Khách hàng" },
+      { to: "/admin/cham-soc", ico: "💝", label: "Chăm sóc KH" },
+      { to: "/admin/danh-gia-dv", ico: "⭐", label: "Đánh giá DV" }
+    ]
+  },
+  {
+    title: "Kinh doanh",
+    items: [
+      { to: "/admin/thong-ke", ico: "📈", label: "Thống kê" },
+      { to: "/admin/voucher", ico: "🏷️", label: "Voucher" },
+      { to: "/admin/nhan-vien", ico: "🧑‍🔧", label: "Nhân viên" }
+    ]
+  },
+  {
+    title: "Liên lạc",
+    items: [
+      { to: "/admin/tin-nhan", ico: "💬", label: "Tin nhắn", badgeKey: "chat" },
+      { to: "/admin/lien-he", ico: "✉️", label: "Liên hệ" }
+    ]
+  },
+  {
+    title: "Nội dung website",
+    items: [
+      { to: "/admin/tin-tuc", ico: "📝", label: "Tin tức" },
+      { to: "/admin/combo", ico: "🎁", label: "Combo" },
+      { to: "/admin/dich-vu", ico: "💆", label: "Dịch vụ" },
+      { to: "/admin/san-pham", ico: "🛍️", label: "Sản phẩm" },
+      { to: "/admin/danh-gia", ico: "🌟", label: "Đánh giá (web)" }
+    ]
+  }
 ];
+
+// Mục nào đang được chọn -> để mở đúng nhóm chứa nó
+const isItemActive = (m, pathname) =>
+  m.end ? pathname === m.to : pathname === m.to || pathname.startsWith(m.to + "/");
+const isSectionActive = (sec, pathname) => sec.items.some((m) => isItemActive(m, pathname));
 
 export default function AdminLayout() {
   const nav = useNavigate();
+  const loc = useLocation();
   const [open, setOpen] = useState(false);
+  // Nhóm nào đang mở (accordion). Mặc định mở nhóm chứa trang hiện tại.
+  const [openSecs, setOpenSecs] = useState(() => {
+    const s = {};
+    MENU_SECTIONS.forEach((sec, i) => { if (sec.title && isSectionActive(sec, loc.pathname)) s[i] = true; });
+    return s;
+  });
+  const toggleSec = (i) => setOpenSecs((s) => ({ ...s, [i]: !s[i] }));
+
+  // Khi chuyển trang, tự mở nhóm chứa trang đang xem (giữ nguyên nhóm user đã mở)
+  useEffect(() => {
+    setOpenSecs((prev) => {
+      const next = { ...prev };
+      MENU_SECTIONS.forEach((sec, i) => { if (sec.title && isSectionActive(sec, loc.pathname)) next[i] = true; });
+      return next;
+    });
+  }, [loc.pathname]);
   const [chatUnread, setChatUnread] = useState(0);
   const [muted, setMuted] = useState(
     () => localStorage.getItem("baotram_chat_muted") === "1"
@@ -223,15 +277,35 @@ export default function AdminLayout() {
           <span>QUẢN TRỊ</span>
         </div>
         <nav className="admin-nav" onClick={() => setOpen(false)}>
-          {MENU.map((m) => (
-            <NavLink key={m.to} to={m.to} end={m.end}
-              className={({ isActive }) => (isActive ? "active" : "")}>
-              <span className="ico">{m.ico}</span> {m.label}
-              {m.badgeKey === "chat" && chatUnread > 0 && (
-                <span className="nav-badge">{chatUnread}</span>
-              )}
-            </NavLink>
-          ))}
+          {MENU_SECTIONS.map((sec, i) => {
+            const renderLink = (m) => (
+              <NavLink key={m.to} to={m.to} end={m.end}
+                className={({ isActive }) => (isActive ? "active" : "")}>
+                <span className="ico">{m.ico}</span> {m.label}
+                {m.badgeKey === "chat" && chatUnread > 0 && (
+                  <span className="nav-badge">{chatUnread}</span>
+                )}
+              </NavLink>
+            );
+            // Nhóm không tiêu đề (Tổng quan) -> luôn hiện
+            if (!sec.title) return <div className="nav-group" key={i}>{sec.items.map(renderLink)}</div>;
+            const isOpen = !!openSecs[i];
+            // Badge tin nhắn hiện cạnh tiêu đề khi nhóm đang thu lại
+            const secBadge = !isOpen && sec.items.some((m) => m.badgeKey === "chat") && chatUnread > 0;
+            return (
+              <div className={"nav-group collapsible" + (isOpen ? " open" : "")} key={sec.title}>
+                <button type="button" className="nav-group-title"
+                  onClick={(e) => { e.stopPropagation(); toggleSec(i); }}>
+                  <span>{sec.title}</span>
+                  <span className="nav-caret">
+                    {secBadge && <span className="nav-badge sm">{chatUnread}</span>}
+                    {isOpen ? "▾" : "▸"}
+                  </span>
+                </button>
+                {isOpen && sec.items.map(renderLink)}
+              </div>
+            );
+          })}
         </nav>
         <button className="logout" onClick={logout}>Đăng xuất</button>
       </aside>
@@ -264,6 +338,10 @@ export default function AdminLayout() {
             <Route path="danh-gia" element={<CrudManager {...TESTIMONIALS} />} />
             <Route path="dat-lich" element={<BookingManager />} />
             <Route path="khach-hang" element={<CustomerManager />} />
+            <Route path="cham-soc" element={<CareManager />} />
+            <Route path="danh-gia-dv" element={<ReviewManager />} />
+            <Route path="nhan-vien" element={<StaffManager />} />
+            <Route path="voucher" element={<VoucherManager />} />
             <Route path="tin-nhan" element={<ChatManager />} />
             <Route path="thong-ke" element={<Stats />} />
             <Route path="lien-he" element={

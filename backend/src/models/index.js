@@ -136,6 +136,14 @@ const bookingSchema = new Schema(
     branch: String, // cơ sở/chi nhánh khách chọn
     date: String,
     note: String,
+    amount: { type: Number, default: 0 },     // số tiền thực thu khi hoàn tất (đồng)
+    counted: { type: Boolean, default: false }, // đã cộng vào chi tiêu/điểm của khách chưa
+    remindedAt: Date,                          // lần gần nhất đã gửi nhắc lịch
+    staff: String,                             // nhân viên / KTV phụ trách
+    startedAt: Date,                           // bắt đầu phục vụ
+    completedAt: Date,                         // hoàn tất (để tính thời lượng)
+    reviewRequestedAt: Date,                   // đã gửi lời mời đánh giá
+    reviewedAt: Date,                          // khách đã đánh giá
     // Trạng thái xử lý: moi | da_dung | doi_dv | huy
     status: { type: String, default: "moi" }
   },
@@ -185,11 +193,106 @@ const conversationSchema = new Schema(
 const customerSchema = new Schema(
   {
     name: String,
-    phone: { type: String, index: true },
+    phone: String, // index unique khai báo riêng bên dưới
     email: String,
     address: String,
     birthday: String,
-    note: String
+    note: String,
+    // --- Tích luỹ / chăm sóc khách hàng ---
+    visits: { type: Number, default: 0 },        // số lần đã dùng dịch vụ
+    totalSpent: { type: Number, default: 0 },    // tổng chi tiêu (đồng)
+    points: { type: Number, default: 0 },        // điểm thưởng tích luỹ
+    tier: String,                                // hạng đặt tay (ghi đè hạng tự tính)
+    lastVisitAt: Date,                            // lần dùng dịch vụ gần nhất
+    birthdayGreetedYear: Number                   // năm gần nhất đã gửi lời chúc sinh nhật
+  },
+  { timestamps: true, toJSON: idJSON }
+);
+
+// Nhân viên / kỹ thuật viên
+const staffSchema = new Schema(
+  {
+    name: { type: String, required: true },
+    phone: String,
+    role: String, // VD: KTV chăm sóc da, Thợ tóc, Lễ tân...
+    image: String, // ảnh đại diện (data URL, đã nén)
+    active: { type: Boolean, default: true }
+  },
+  { timestamps: true, toJSON: idJSON }
+);
+
+// Đánh giá sau dịch vụ (khách gửi qua link)
+const reviewSchema = new Schema(
+  {
+    bookingId: String,
+    name: String,
+    phone: String,
+    service: String,
+    staff: String,
+    rating: { type: Number, default: 5 }, // 1..5
+    comment: String,
+    published: { type: Boolean, default: false } // đã đẩy lên Testimonials
+  },
+  { timestamps: true, toJSON: idJSON }
+);
+
+// Lịch gửi đã hẹn (vd: chúc sinh nhật) -> tới giờ server tự gửi
+const scheduledSendSchema = new Schema(
+  {
+    type: { type: String, default: "birthday" },
+    customerId: String,
+    name: String,
+    email: String,
+    phone: String,
+    sendAt: { type: Date, required: true },     // thời điểm hẹn gửi
+    voucherMode: { type: String, default: "create" }, // create | existing | none
+    voucherType: { type: String, default: "percent" },
+    voucherValue: { type: Number, default: 20 },
+    voucherExpiryDays: { type: Number, default: 30 },
+    voucherCode: String,                        // mã chọn sẵn / mã đã tạo sau khi gửi
+    status: { type: String, default: "pending" }, // pending | sent | failed | canceled
+    emailSent: Boolean,
+    sentAt: Date
+  },
+  { timestamps: true, toJSON: idJSON }
+);
+
+// Chiến dịch khuyến mãi (lễ / sinh nhật spa): hẹn giờ tự gửi mã cho nhóm khách
+const campaignSchema = new Schema(
+  {
+    name: { type: String, required: true },    // tên dịp, vd "Khuyến mãi 8/3"
+    message: String,                            // lời nhắn tuỳ chọn
+    channels: { type: [String], default: ["email"] }, // email | zalo | sms
+    sendAt: { type: Date, required: true },
+    voucherMode: { type: String, default: "create" }, // create = tạo mã mới | existing = dùng mã có sẵn
+    voucherType: { type: String, default: "percent" },
+    voucherValue: { type: Number, default: 10 },
+    voucherExpiryDays: { type: Number, default: 30 },
+    audience: { type: String, default: "all" }, // all | top | random
+    count: { type: Number, default: 0 },        // số khách (0 = tất cả)
+    status: { type: String, default: "pending" }, // pending | sent | failed | canceled
+    voucherCode: String,                        // mã tạo ra khi gửi
+    recipients: [{ _id: false, name: String, phone: String, email: String }],
+    emailSentCount: { type: Number, default: 0 },
+    sentAt: Date
+  },
+  { timestamps: true, toJSON: idJSON }
+);
+
+// Voucher / mã giảm giá
+const voucherSchema = new Schema(
+  {
+    code: { type: String, required: true, uppercase: true, trim: true },
+    description: String,
+    type: { type: String, enum: ["percent", "amount"], default: "percent" }, // % hoặc số tiền
+    value: { type: Number, default: 0 },        // 20 (=20%) hoặc 50000 (=50.000đ)
+    minOrder: { type: Number, default: 0 },     // đơn tối thiểu để áp dụng
+    maxDiscount: { type: Number, default: 0 },  // giảm tối đa (0 = không giới hạn), dùng cho percent
+    expiry: String,                             // "YYYY-MM-DD" (để trống = không hết hạn)
+    usageLimit: { type: Number, default: 0 },   // số lượt dùng tối đa (0 = không giới hạn)
+    usedCount: { type: Number, default: 0 },
+    totalDiscount: { type: Number, default: 0 }, // tổng tiền đã giảm (kinh phí) qua các lượt dùng
+    active: { type: Boolean, default: true }
   },
   { timestamps: true, toJSON: idJSON }
 );
@@ -220,6 +323,9 @@ conversationSchema.index({ lastMessageAt: -1 });
 // Customer: tim nhanh theo phone
 customerSchema.index({ phone: 1 }, { unique: true, sparse: true });
 
+// Voucher: tim nhanh & khong trung ma
+voucherSchema.index({ code: 1 }, { unique: true });
+
 // Event: compound index cho stats query
 eventSchema.index({ day: 1, type: 1 });
 
@@ -245,5 +351,10 @@ module.exports = {
   Contact: mongoose.model("Contact", contactSchema),
   Conversation: mongoose.model("Conversation", conversationSchema),
   Event: mongoose.model("Event", eventSchema),
-  Customer: mongoose.model("Customer", customerSchema)
+  Customer: mongoose.model("Customer", customerSchema),
+  Voucher: mongoose.model("Voucher", voucherSchema),
+  Staff: mongoose.model("Staff", staffSchema),
+  Review: mongoose.model("Review", reviewSchema),
+  ScheduledSend: mongoose.model("ScheduledSend", scheduledSendSchema),
+  Campaign: mongoose.model("Campaign", campaignSchema)
 };

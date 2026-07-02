@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getBookings, getTraffic } from "../../adminApi";
+import { getBookings, getTraffic, getStaffStats } from "../../adminApi";
 
 const MONTHS = ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12"];
 
@@ -59,7 +59,7 @@ function BarChart({ labels, values, color = "#1f5c3d" }) {
 
 /* Biểu đồ đường "nhịp sống" bằng SVG thuần */
 function LineChart({ labels, values, color = "#1f5c3d" }) {
-  const W = 720, H = 240, padL = 36, padB = 28, padT = 16, padR = 12;
+  const W = 720, H = 240, padL = 36, padB = 28, padT = 30, padR = 12;
   const max = Math.max(1, ...values);
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -82,16 +82,23 @@ function LineChart({ labels, values, color = "#1f5c3d" }) {
         ))}
         <path d={areaPath} fill={color} opacity="0.12" />
         <path d={linePath} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        {values.map((v, i) => (
-          <g key={i}>
-            <circle cx={xAt(i)} cy={yAt(v)} r="3" fill={color}>
-              <title>Ngày {labels[i]}: {v}</title>
-            </circle>
-            {(n <= 16 || i % 2 === 0) && (
-              <text x={xAt(i)} y={H - padB + 16} textAnchor="middle" className="chart-lbl">{labels[i]}</text>
-            )}
-          </g>
-        ))}
+        {values.map((v, i) => {
+          const cy = yAt(v);
+          return (
+            <g key={i}>
+              <circle cx={xAt(i)} cy={cy} r={v > 0 ? 4 : 2.5}
+                fill={v > 0 ? "#fff" : color} stroke={color} strokeWidth={v > 0 ? 2.5 : 0}>
+                <title>Ngày {labels[i]}: {v}</title>
+              </circle>
+              {v > 0 && (
+                <text x={xAt(i)} y={cy - 10} textAnchor="middle" className="chart-val">{v}</text>
+              )}
+              {(n <= 16 || i % 2 === 0) && (
+                <text x={xAt(i)} y={H - padB + 16} textAnchor="middle" className="chart-lbl">{labels[i]}</text>
+              )}
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
@@ -169,6 +176,14 @@ function MultiLineChart({ labels, series }) {
           const pts = se.values.map((v, i) => `${xAt(i)},${yAt(v)}`);
           return <path key={si} d={"M" + pts.join(" L")} fill="none" stroke={se.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />;
         })}
+        {series.map((se, si) => se.values.map((v, i) => (v > 0 ? (
+          <g key={si + "-" + i}>
+            <circle cx={xAt(i)} cy={yAt(v)} r="3.5" fill="#fff" stroke={se.color} strokeWidth="2">
+              <title>{labels[i]} • {se.label}: {v}</title>
+            </circle>
+            <text x={xAt(i)} y={yAt(v) - 8} textAnchor="middle" className="chart-val" style={{ fill: se.color }}>{v}</text>
+          </g>
+        ) : null)))}
         {labels.map((lb, i) => (
           (n <= 16 || i % 2 === 0) && (
             <text key={i} x={xAt(i)} y={H - padB + 18} textAnchor="middle" className="chart-lbl">{lb}</text>
@@ -493,10 +508,10 @@ function MonthlyByYear({ byMonth, byYear, field, color, title }) {
   );
 }
 
-/* Lượt truy cập theo từng ngày của 1 tháng (chọn tháng) — 2 dạng biểu đồ */
-function DailyVisits({ byDay }) {
+/* Số liệu theo từng ngày của 1 tháng (chọn tháng) — dùng chung cho truy cập & tương tác */
+function DailyChart({ byDay, field = "visit", title = "Theo ngày" }) {
   const map = {};
-  byDay.forEach((d) => { map[d.day] = d.visit; });
+  byDay.forEach((d) => { map[d.day] = d[field]; });
 
   const now = new Date();
   const curMonth = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
@@ -515,7 +530,7 @@ function DailyVisits({ byDay }) {
   return (
     <div className="chart-card">
       <div className="chart-head">
-        <h3>Lượt truy cập theo ngày — tổng {monthTotal}</h3>
+        <h3>{title} — tổng {monthTotal}</h3>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div className="basis-switch">
             <button className={chartType === "bar" ? "on" : ""} onClick={() => setChartType("bar")}>Cột</button>
@@ -560,7 +575,7 @@ function TrafficStats({ traffic, err, loading }) {
         <div className="stat-card"><div className="n">{totals.visit}</div><div className="l">Tổng lượt truy cập</div></div>
       </div>
 
-      <DailyVisits byDay={byDay} />
+      <DailyChart byDay={byDay} field="visit" title="Lượt truy cập theo ngày" />
 
       <MonthlyByYear
         byMonth={byMonth} byYear={byYear} field="visit" color="#1f5c3d"
@@ -593,7 +608,8 @@ function InteractionStats({ traffic, err, loading }) {
   const totalAll = ITYPES.reduce((s, t) => s + (totals[t.key] || 0), 0);
   if (totalAll === 0) return <div className="admin-empty">Chưa ghi nhận lượt tương tác nào.</div>;
 
-  // Thêm trường tổng tương tác mỗi tháng/năm để vẽ biểu đồ chung
+  // Thêm trường tổng tương tác mỗi ngày/tháng/năm để vẽ biểu đồ chung
+  const byDaySum = traffic.byDay.map((d) => ({ ...d, all: d.call + d.zalo + d.messenger + d.chat }));
   const byMonthSum = byMonth.map((m) => ({ ...m, all: m.call + m.zalo + m.messenger + m.chat }));
   const byYearSum = byYear.map((y) => ({ ...y, all: y.call + y.zalo + y.messenger + y.chat }));
 
@@ -616,10 +632,19 @@ function InteractionStats({ traffic, err, loading }) {
         <DonutToggle data={donut} />
       </div>
 
+      <DailyChart byDay={byDaySum} field="all" title="Lượt tương tác theo ngày" />
+
       <MonthlyByYear
         byMonth={byMonthSum} byYear={byYearSum} field="all" color="#c98a8a"
         title="Tổng lượt tương tác theo tháng"
       />
+
+      {byYearSum.length > 1 && (
+        <div className="chart-card">
+          <div className="chart-head"><h3>Tổng lượt tương tác theo năm</h3></div>
+          <ToggleChart labels={byYearSum.map((y) => y.year)} values={byYearSum.map((y) => y.all)} color="#b8893a" />
+        </div>
+      )}
     </>
   );
 }
@@ -627,7 +652,8 @@ function InteractionStats({ traffic, err, loading }) {
 /* ---------- Tab: Lịch hẹn theo ngày trong tháng ---------- */
 const APPT_STATUS = [
   { key: "moi", label: "Mới / Sắp tới", color: "#e0a800" },
-  { key: "da_dung", label: "Đã dùng DV", color: "#1e7a3e" },
+  { key: "dang_dung", label: "Đang phục vụ", color: "#00897b" },
+  { key: "da_dung", label: "Hoàn tất", color: "#1e7a3e" },
   { key: "doi_dv", label: "Đổi DV", color: "#1c5fb0" },
   { key: "huy", label: "Đã huỷ", color: "#c0392b" }
 ];
@@ -667,7 +693,7 @@ function AppointmentStats() {
       if (!day) { noDate++; continue; }
       monthsSet.add(day.slice(0, 7));
       const st = APPT_STATUS.some((s) => s.key === b.status) ? b.status : "moi";
-      (byDayStatus[day] = byDayStatus[day] || { moi: 0, da_dung: 0, doi_dv: 0, huy: 0 })[st]++;
+      (byDayStatus[day] = byDayStatus[day] || { moi: 0, dang_dung: 0, da_dung: 0, doi_dv: 0, huy: 0 })[st]++;
     }
     monthsSet.add(month);
     const months = [...monthsSet].sort((a, b) => b.localeCompare(a));
@@ -685,7 +711,7 @@ function AppointmentStats() {
       })
     }));
 
-    const cards = { total: 0, moi: 0, da_dung: 0, doi_dv: 0, huy: 0 };
+    const cards = { total: 0, moi: 0, dang_dung: 0, da_dung: 0, doi_dv: 0, huy: 0 };
     series.forEach((se, idx) => {
       const sum = se.values.reduce((a, b) => a + b, 0);
       cards[APPT_STATUS[idx].key] = sum;
@@ -741,6 +767,250 @@ function AppointmentStats() {
   );
 }
 
+/* ---------- Tab: Doanh thu & báo cáo kinh doanh ---------- */
+const fmtMoney = (n) => (Number(n) || 0).toLocaleString("vi-VN") + "đ";
+const fmtShort = (n) => {
+  const x = Number(n) || 0;
+  if (x >= 1e9) return (x / 1e9).toFixed(1) + "B";
+  if (x >= 1e6) return (x / 1e6).toFixed(1) + "tr";
+  if (x >= 1e3) return Math.round(x / 1e3) + "k";
+  return String(x);
+};
+const DOW_LBL = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+/* Biểu đồ cột hiển thị nhãn giá trị đã rút gọn (cho tiền) */
+function MoneyBarChart({ labels, values, color = "#1e7a3e" }) {
+  const W = 720, H = 280, padL = 44, padB = 34, padT = 16, padR = 12;
+  const max = Math.max(1, ...values);
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = values.length, gap = plotW / n, barW = Math.min(46, gap * 0.62);
+  const ticks = [0, 0.5, 1].map((t) => ({ y: padT + plotH - plotH * t, v: max * t }));
+  return (
+    <div className="chart-scroll">
+      <svg viewBox={`0 0 ${W} ${H}`} className="bar-chart" role="img">
+        {ticks.map((tk, i) => (
+          <g key={i}>
+            <line x1={padL} y1={tk.y} x2={W - padR} y2={tk.y} stroke="#e3e7e3" strokeWidth="1" />
+            <text x={padL - 6} y={tk.y + 4} textAnchor="end" className="chart-axis">{fmtShort(tk.v)}</text>
+          </g>
+        ))}
+        {values.map((v, i) => {
+          const h = (v / max) * plotH;
+          const x = padL + gap * i + (gap - barW) / 2;
+          const y = padT + plotH - h;
+          return (
+            <g key={i}>
+              <rect x={x} y={y} width={barW} height={h} rx="5" fill={color}><title>{labels[i]}: {fmtMoney(v)}</title></rect>
+              {v > 0 && <text x={x + barW / 2} y={y - 6} textAnchor="middle" className="chart-val">{fmtShort(v)}</text>}
+              <text x={x + barW / 2} y={H - padB + 18} textAnchor="middle" className="chart-lbl">{labels[i]}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function RevenueStats() {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+
+  useEffect(() => {
+    getBookings()
+      .then((d) => setBookings(Array.isArray(d) ? d : []))
+      .catch(() => setErr("Không tải được dữ liệu. Kiểm tra backend & đăng nhập."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const done = useMemo(() => bookings.filter((b) => b.status === "da_dung"), [bookings]);
+
+  const dateOf = (b) => {
+    const raw = b.date && /^\d{4}-\d{2}-\d{2}/.test(b.date) ? b.date : b.createdAt;
+    const d = raw ? new Date(raw) : null;
+    return d && !isNaN(d.getTime()) ? d : null;
+  };
+
+  const { years, revByMonth, topServices, byDow, byHour, totals } = useMemo(() => {
+    const yearsSet = new Set();
+    const revByMonthMap = {};
+    const svc = {};
+    const dow = Array(7).fill(0);
+    const hour = {};
+    let totalRev = 0, totalThisYear = 0, totalThisMonth = 0;
+    for (const b of done) {
+      const d = dateOf(b);
+      const amt = b.amount || 0;
+      totalRev += amt;
+      if (d) {
+        yearsSet.add(d.getFullYear());
+        if (d.getFullYear() === year) {
+          (revByMonthMap[d.getMonth()] = (revByMonthMap[d.getMonth()] || 0) + amt);
+          totalThisYear += amt;
+          if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) totalThisMonth += amt;
+        }
+        dow[(d.getDay() + 6) % 7] += 1;
+        const hk = b.date && b.date.includes("T") ? b.date.split("T")[1].slice(0, 2) : null;
+        if (hk) hour[hk] = (hour[hk] || 0) + 1;
+      }
+      const key = (b.service || "Khác").trim() || "Khác";
+      const s = (svc[key] = svc[key] || { label: key, count: 0, revenue: 0 });
+      s.count += 1; s.revenue += amt;
+    }
+    const revByMonth = MONTHS.map((_, i) => revByMonthMap[i] || 0);
+    const topServices = Object.values(svc).sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+    const hourKeys = Object.keys(hour).sort();
+    const byHour = { labels: hourKeys.map((h) => h + "h"), values: hourKeys.map((h) => hour[h]) };
+    return {
+      years: [...yearsSet].sort((a, b) => b - a),
+      revByMonth, topServices, byDow: dow,
+      byHour,
+      totals: { totalRev, totalThisYear, totalThisMonth, count: done.length, avg: done.length ? Math.round(totalRev / done.length) : 0 }
+    };
+  }, [done, year]); // eslint-disable-line
+
+  if (err) return <div className="admin-msg err">{err}</div>;
+  if (loading) return <div className="admin-empty">Đang tải...</div>;
+  if (done.length === 0) return <div className="admin-empty">Chưa có lịch nào “Đã dùng DV” để tính doanh thu. Hãy đánh dấu hoàn tất & nhập số tiền ở mục Đặt lịch.</div>;
+
+  const maxSvcRev = Math.max(1, ...topServices.map((s) => s.revenue));
+
+  return (
+    <>
+      <div className="admin-stats">
+        <div className="stat-card"><div className="n">{fmtShort(totals.totalRev)}</div><div className="l">Tổng doanh thu</div></div>
+        <div className="stat-card"><div className="n">{fmtShort(totals.totalThisMonth)}</div><div className="l">Tháng này</div></div>
+        <div className="stat-card"><div className="n">{fmtShort(totals.totalThisYear)}</div><div className="l">Năm {now.getFullYear()}</div></div>
+        <div className="stat-card"><div className="n">{fmtShort(totals.avg)}</div><div className="l">TB/lượt ({totals.count} lượt)</div></div>
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-head">
+          <h3>Doanh thu theo tháng</h3>
+          {years.length > 0 && (
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {years.map((y) => <option key={y} value={y}>Năm {y}</option>)}
+            </select>
+          )}
+        </div>
+        <MoneyBarChart labels={MONTHS} values={revByMonth} />
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-head"><h3>Dịch vụ doanh thu cao nhất</h3></div>
+        {topServices.length === 0 ? <div className="admin-empty">Chưa có dữ liệu.</div> : (
+          <div className="rev-rank">
+            {topServices.map((s, i) => (
+              <div key={s.label} className="rev-row">
+                <span className="rev-name" title={s.label}>{i + 1}. {s.label}</span>
+                <span className="rev-bar"><span style={{ width: `${(s.revenue / maxSvcRev) * 100}%` }} /></span>
+                <span className="rev-val">{fmtMoney(s.revenue)} <small>· {s.count} lượt</small></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="chart-card">
+        <div className="chart-head"><h3>Ngày đông khách trong tuần</h3></div>
+        <BarChart labels={DOW_LBL} values={byDow} color="#c9a55c" />
+      </div>
+
+      {byHour.labels.length > 0 && (
+        <div className="chart-card">
+          <div className="chart-head"><h3>Khung giờ đông khách</h3></div>
+          <BarChart labels={byHour.labels} values={byHour.values} color="#6f9e7f" />
+          <div className="chart-sub" style={{ textTransform: "none" }}>* Chỉ tính các lịch có nhập giờ hẹn.</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ---------- Tab: Thống kê nhân viên (sao & số khách) ---------- */
+const Stars = ({ n }) => (
+  <span style={{ color: "#f5b301", letterSpacing: 1, whiteSpace: "nowrap" }}>
+    {"★".repeat(Math.round(n))}<span style={{ color: "#d8dcd8" }}>{"★".repeat(5 - Math.round(n))}</span>
+  </span>
+);
+
+function StaffStats() {
+  const now = new Date();
+  const [month, setMonth] = useState(`${now.getFullYear()}-${pad2(now.getMonth() + 1)}`);
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  // 12 tháng gần nhất + "Tất cả thời gian"
+  const monthOpts = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    monthOpts.push(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
+  }
+
+  useEffect(() => {
+    setLoading(true); setErr("");
+    getStaffStats(month)
+      .then((d) => setRows(Array.isArray(d) ? d : []))
+      .catch(() => setErr("Không tải được dữ liệu. Kiểm tra backend & đăng nhập."))
+      .finally(() => setLoading(false));
+  }, [month]);
+
+  const top = rows[0];
+  const maxServed = Math.max(1, ...rows.map((r) => r.served));
+
+  return (
+    <div>
+      <div className="chart-card">
+        <div className="chart-head">
+          <h3>Thống kê theo nhân viên</h3>
+          <select value={month} onChange={(e) => setMonth(e.target.value)}>
+            <option value="">Tất cả thời gian</option>
+            {monthOpts.map((m) => <option key={m} value={m}>Tháng {m.slice(5)}/{m.slice(0, 4)}</option>)}
+          </select>
+        </div>
+
+        {err && <div className="admin-msg err">{err}</div>}
+        {loading ? (
+          <div className="admin-empty">Đang tải...</div>
+        ) : rows.length === 0 ? (
+          <div className="admin-empty">Chưa có dữ liệu nhân viên trong {month ? "tháng này" : "khoảng này"}. Cần gán KTV cho lịch & có đánh giá.</div>
+        ) : (
+          <>
+            {top && top.reviews > 0 && (
+              <div className="top-service">
+                🏆 Nhiều sao nhất: <b>{top.staff}</b> — {top.avg} ★ ({top.reviews} đánh giá), phục vụ {top.served} khách
+              </div>
+            )}
+            <div className="staff-stat-list">
+              {rows.map((r) => (
+                <div key={r.staff} className="staff-stat">
+                  <div className="ss-name">{r.staff}</div>
+                  <div className="ss-rating">
+                    <Stars n={r.avg} /> <b>{r.avg || "—"}</b>
+                    <span className="ss-sub">{r.reviews} đánh giá</span>
+                  </div>
+                  <div className="ss-served">
+                    <div className="ss-served-bar"><span style={{ width: `${(r.served / maxServed) * 100}%` }} /></div>
+                    <span className="ss-served-n">{r.served} khách</span>
+                  </div>
+                  <div className="ss-stars">
+                    {[5, 4, 3, 2, 1].map((s) => r.stars[s] ? (
+                      <span key={s} className="ss-star-chip">{s}★ <b>{r.stars[s]}</b></span>
+                    ) : null)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Trang Thống kê có nhiều tab ---------- */
 export default function Stats() {
   const [tab, setTab] = useState("booking");
@@ -752,14 +1022,18 @@ export default function Stats() {
         <h2>Thống kê</h2>
         <div className="basis-switch stats-tabs">
           <button className={tab === "booking" ? "on" : ""} onClick={() => setTab("booking")}>📅 Đặt lịch</button>
+          <button className={tab === "revenue" ? "on" : ""} onClick={() => setTab("revenue")}>💰 Doanh thu</button>
           <button className={tab === "appointment" ? "on" : ""} onClick={() => setTab("appointment")}>📋 Lịch hẹn</button>
+          <button className={tab === "staff" ? "on" : ""} onClick={() => setTab("staff")}>🧑‍🔧 Nhân viên</button>
           <button className={tab === "traffic" ? "on" : ""} onClick={() => setTab("traffic")}>👥 Truy cập</button>
           <button className={tab === "interaction" ? "on" : ""} onClick={() => setTab("interaction")}>📞 Tương tác</button>
         </div>
       </div>
 
       {tab === "booking" && <BookingStats />}
+      {tab === "revenue" && <RevenueStats />}
       {tab === "appointment" && <AppointmentStats />}
+      {tab === "staff" && <StaffStats />}
       {tab === "traffic" && <TrafficStats traffic={traffic} err={err} loading={loading} />}
       {tab === "interaction" && <InteractionStats traffic={traffic} err={err} loading={loading} />}
     </div>

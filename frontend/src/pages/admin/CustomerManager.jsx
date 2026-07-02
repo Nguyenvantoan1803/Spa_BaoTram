@@ -1,11 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "../../adminApi";
+import {
+  getCustomers, createCustomer, updateCustomer, deleteCustomer, getCustomerHistory
+} from "../../adminApi";
 
 const norm = (s) =>
   (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
 const onlyDigits = (s) => (s || "").replace(/[^0-9]/g, "");
+const fmtMoney = (n) => (Number(n) || 0).toLocaleString("vi-VN") + "đ";
+const fmtDate = (v) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString("vi-VN");
+};
 
-const BLANK = { name: "", phone: "", email: "", address: "", birthday: "", note: "" };
+/* Cấu hình hạng thành viên (đồng bộ với backend) */
+const TIER_CLS = {
+  kim_cuong: "tier-kc",
+  vang: "tier-vang",
+  bac: "tier-bac",
+  moi: "tier-moi"
+};
+const TIER_OPTS = [
+  { key: "moi", label: "Thành viên" },
+  { key: "bac", label: "Bạc" },
+  { key: "vang", label: "Vàng" },
+  { key: "kim_cuong", label: "Kim cương" }
+];
+
+const STATUS_LABEL = {
+  moi: "Mới", da_dung: "Đã dùng DV", doi_dv: "Đổi DV", huy: "Đã huỷ"
+};
+
+const BLANK = { name: "", phone: "", email: "", address: "", birthday: "", note: "", tier: "moi" };
 
 /* Quản lý khách hàng: tự tạo khi có lịch hẹn, nhân viên bổ sung thông tin. */
 export default function CustomerManager() {
@@ -16,6 +42,8 @@ export default function CustomerManager() {
   const [edit, setEdit] = useState(null); // bản ghi đang sửa, hoặc {} khi thêm mới
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
+  // Lịch sử khách
+  const [history, setHistory] = useState(null); // { customer, bookings } | "loading"
 
   const load = () => {
     setLoading(true);
@@ -39,9 +67,20 @@ export default function CustomerManager() {
   const openEdit = (c) => {
     setForm({
       name: c.name || "", phone: c.phone || "", email: c.email || "",
-      address: c.address || "", birthday: c.birthday || "", note: c.note || ""
+      address: c.address || "", birthday: c.birthday || "", note: c.note || "",
+      tier: c.tier || "moi"
     });
     setEdit(c);
+  };
+
+  const openHistory = async (c) => {
+    setHistory("loading");
+    try {
+      const data = await getCustomerHistory(c.id);
+      setHistory(data);
+    } catch {
+      setHistory({ customer: c, bookings: [], error: true });
+    }
   };
 
   const save = async (e) => {
@@ -92,10 +131,12 @@ export default function CustomerManager() {
               <tr>
                 <th>Họ tên</th>
                 <th>Điện thoại</th>
-                <th>Email</th>
-                <th>Địa chỉ</th>
+                <th>Hạng</th>
+                <th>Lượt đến</th>
+                <th>Tổng chi tiêu</th>
+                <th>Điểm</th>
+                <th>Lần gần nhất</th>
                 <th>Ngày sinh</th>
-                <th>Ghi chú</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
@@ -104,12 +145,15 @@ export default function CustomerManager() {
                 <tr key={c.id}>
                   <td><b>{c.name || "—"}</b></td>
                   <td>{c.phone || "—"}</td>
-                  <td>{c.email || "—"}</td>
-                  <td>{c.address || "—"}</td>
+                  <td><span className={"tier-badge " + (TIER_CLS[c.tier] || "tier-moi")}>{c.tierLabel || "Thành viên"}</span></td>
+                  <td style={{ textAlign: "center" }}>{c.visits || 0}</td>
+                  <td><b>{fmtMoney(c.totalSpent)}</b></td>
+                  <td style={{ textAlign: "center" }}>{c.points || 0}</td>
+                  <td>{fmtDate(c.lastVisitAt)}</td>
                   <td>{c.birthday || "—"}</td>
-                  <td className="bk-note">{c.note || "—"}</td>
                   <td>
                     <div className="row-actions">
+                      <button className="btn-mini btn-book" onClick={() => openHistory(c)}>Lịch sử</button>
                       <button className="btn-mini btn-edit" onClick={() => openEdit(c)}>Sửa</button>
                       <button className="btn-mini btn-del" onClick={() => remove(c)}>Xoá</button>
                     </div>
@@ -120,6 +164,63 @@ export default function CustomerManager() {
           </table>
         )}
       </div>
+
+      {/* Modal lịch sử khách hàng */}
+      {history && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setHistory(null)}>
+          <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal-head">
+              <h3>📋 Lịch sử khách hàng</h3>
+              <button type="button" onClick={() => setHistory(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              {history === "loading" ? (
+                <div className="admin-empty">Đang tải...</div>
+              ) : (
+                <>
+                  <div className="hist-summary">
+                    <div><b style={{ fontSize: 16 }}>{history.customer.name || history.customer.phone || "Khách"}</b>
+                      <span className={"tier-badge " + (TIER_CLS[history.customer.tier] || "tier-moi")} style={{ marginLeft: 8 }}>
+                        {history.customer.tierLabel || "Thành viên"}
+                      </span>
+                    </div>
+                    <div className="hist-stats">
+                      <span>📞 {history.customer.phone || "—"}</span>
+                      <span>🔁 {history.customer.visits || 0} lượt</span>
+                      <span>💰 {fmtMoney(history.customer.totalSpent)}</span>
+                      <span>⭐ {history.customer.points || 0} điểm</span>
+                    </div>
+                  </div>
+                  <h4 style={{ margin: "14px 0 8px", color: "#1f5c3d" }}>Các lần đặt lịch ({history.bookings.length})</h4>
+                  {history.bookings.length === 0 ? (
+                    <div className="admin-empty">Chưa có lịch nào.</div>
+                  ) : (
+                    <div className="hist-list">
+                      {history.bookings.map((b) => (
+                        <div key={b.id} className="hist-row">
+                          <div className="hist-date">{b.date || "—"}</div>
+                          <div className="hist-svc">
+                            <b>{b.service || "—"}</b>
+                            {b.branch ? <span className="hist-branch"> · {b.branch}</span> : null}
+                            {b.note ? <div className="hist-note">📝 {b.note}</div> : null}
+                          </div>
+                          <div className="hist-meta">
+                            {b.amount > 0 && <span className="hist-amount">{fmtMoney(b.amount)}</span>}
+                            <span className="hist-status">{STATUS_LABEL[b.status] || "Mới"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="btn-cancel" onClick={() => setHistory(null)}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {edit && (
         <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setEdit(null)}>
@@ -148,6 +249,12 @@ export default function CustomerManager() {
               <div className="fld">
                 <label>Ngày sinh</label>
                 <input type="date" value={form.birthday} onChange={(e) => setForm({ ...form, birthday: e.target.value })} />
+              </div>
+              <div className="fld">
+                <label>Hạng thành viên</label>
+                <select value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value })}>
+                  {TIER_OPTS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </select>
               </div>
               <div className="fld">
                 <label>Ghi chú</label>

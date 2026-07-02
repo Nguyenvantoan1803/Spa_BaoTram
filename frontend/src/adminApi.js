@@ -54,6 +54,8 @@ export const createBooking = (body) =>
 export const getContacts = () => adminApi.get("/contact").then((r) => r.data);
 export const updateBooking = (id, body) =>
   adminApi.put(`/booking/${id}`, body).then((r) => r.data);
+export const createBookingReview = (id, body) =>
+  adminApi.post(`/booking/${id}/review`, body).then((r) => r.data);
 
 // Chat tư vấn (admin)
 export const getConversations = () => adminApi.get("/chat").then((r) => r.data);
@@ -79,5 +81,56 @@ export const getCustomers = () => adminApi.get("/customers").then((r) => r.data)
 export const createCustomer = (body) => adminApi.post("/customers", body).then((r) => r.data);
 export const updateCustomer = (id, body) => adminApi.put(`/customers/${id}`, body).then((r) => r.data);
 export const deleteCustomer = (id) => adminApi.delete(`/customers/${id}`).then((r) => r.data);
+export const getCustomerHistory = (id) =>
+  adminApi.get(`/customers/${id}/history`).then((r) => r.data);
+
+// Chăm sóc khách hàng (nhắc lịch / khách lâu chưa quay lại / sinh nhật)
+export const getReminders = (days = 1) =>
+  adminApi.get(`/care/reminders?days=${days}`).then((r) => r.data);
+export const sendReminder = (id) =>
+  adminApi.post(`/care/reminders/${id}/send`).then((r) => r.data);
+export const getSleeping = (days = 30) =>
+  adminApi.get(`/care/sleeping?days=${days}`).then((r) => r.data);
+export const getBirthdays = (days = 7) =>
+  adminApi.get(`/care/birthdays?days=${days}`).then((r) => r.data);
+export const sendBirthday = (id, body = {}) =>
+  adminApi.post(`/care/birthdays/${id}/send`, body).then((r) => r.data);
+export const scheduleBirthday = (id, body) =>
+  adminApi.post(`/care/birthdays/${id}/schedule`, body).then((r) => r.data);
+export const getScheduled = () => adminApi.get("/care/scheduled").then((r) => r.data);
+export const cancelScheduled = (id) => adminApi.delete(`/care/scheduled/${id}`).then((r) => r.data);
+
+// Chiến dịch khuyến mãi
+export const getCampaigns = () => adminApi.get("/care/campaigns").then((r) => r.data);
+export const createCampaign = (body) => adminApi.post("/care/campaigns", body).then((r) => r.data);
+export const updateCampaign = (id, body) => adminApi.put(`/care/campaigns/${id}`, body).then((r) => r.data);
+export const deleteCampaign = (id) => adminApi.delete(`/care/campaigns/${id}`).then((r) => r.data);
+export const sendCampaignNow = (id) => adminApi.post(`/care/campaigns/${id}/send-now`).then((r) => r.data);
+export const previewAudience = (audience, count) =>
+  adminApi.get(`/care/campaigns/preview?audience=${audience}&count=${count || 0}`).then((r) => r.data);
+
+// Voucher / mã giảm giá
+export const getVouchers = () => adminApi.get("/vouchers").then((r) => r.data);
+export const createVoucher = (body) => adminApi.post("/vouchers", body).then((r) => r.data);
+export const updateVoucher = (id, body) => adminApi.put(`/vouchers/${id}`, body).then((r) => r.data);
+export const deleteVoucher = (id) => adminApi.delete(`/vouchers/${id}`).then((r) => r.data);
+export const genVoucherCode = () => adminApi.get("/vouchers/gen-code").then((r) => r.data.code);
+export const redeemVoucher = (code, discount) => adminApi.post("/vouchers/redeem", { code, discount }).then((r) => r.data);
+
+// Nhân viên / kỹ thuật viên
+export const getStaff = () => adminApi.get("/staff").then((r) => r.data);
+export const createStaff = (body) => adminApi.post("/staff", body).then((r) => r.data);
+export const updateStaff = (id, body) => adminApi.put(`/staff/${id}`, body).then((r) => r.data);
+export const deleteStaff = (id) => adminApi.delete(`/staff/${id}`).then((r) => r.data);
+export const getStaffPerformance = () => adminApi.get("/staff/performance").then((r) => r.data);
+export const getStaffStats = (month = "") =>
+  adminApi.get("/staff/stats" + (month ? `?month=${month}` : "")).then((r) => r.data);
+
+// Đánh giá sau dịch vụ
+export const getReviews = () => adminApi.get("/reviews").then((r) => r.data);
+export const publishReview = (id) => adminApi.post(`/reviews/${id}/publish`).then((r) => r.data);
+export const deleteReview = (id) => adminApi.delete(`/reviews/${id}`).then((r) => r.data);
+export const getReviewRequests = () => adminApi.get("/care/reviews").then((r) => r.data);
+export const sendReviewRequest = (id) => adminApi.post(`/care/reviews/${id}/send`).then((r) => r.data);
 
 export default adminApi;

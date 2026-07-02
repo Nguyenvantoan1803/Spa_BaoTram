@@ -19,6 +19,7 @@ const Contact = lazy(() => import("./pages/Contact.jsx"));
 const Privacy = lazy(() => import("./pages/Privacy.jsx"));
 const Terms = lazy(() => import("./pages/Terms.jsx"));
 const NotFound = lazy(() => import("./pages/NotFound.jsx"));
+const Review = lazy(() => import("./pages/Review.jsx"));
 
 const AdminLogin = lazy(() => import("./pages/admin/Login.jsx"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout.jsx"));
@@ -86,6 +87,7 @@ export default function App() {
       <ScrollToTop />
       <Suspense fallback={<PageLoader />}>
         <Routes>
+          <Route path="/danh-gia/:id" element={<Review />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin/*"
